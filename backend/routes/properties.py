@@ -1,92 +1,21 @@
-from utils import update_property_status
+import json
+from utils.update_property_status import update_property_status
 from utils.get_pending_properties import get_pending_properties
 from fastapi import APIRouter, Depends, HTTPException
 from db.mongo import properties_collection
 from routes.auth import get_current_user
-from pydantic import BaseModel
 from datetime import datetime
-from typing import List, Optional
 from agents import Runner
-from agents_folder import moderation_agent
-import json
+from agents_folder.moderation_agent import moderation_agent
+from models.pydantic_models import ( ResidentialSellDetails, 
+                                    ResidentialRentDetails, 
+                                    CommercialRentDetails,
+                                    CommercialSellDetails,
+                                    AgriculturalLeaseDetails,
+                                    AgriculturalSellDetails,
+                                    PropertyInput)
 
 router = APIRouter()
-
-# ========== Property Detail Schemas ==========
-
-class ResidentialSellDetails(BaseModel):
-    price: float
-    negotiable: bool
-    address: str
-    bedrooms: int
-    bathrooms: int
-    floor_number: Optional[str] = None
-    total_area_yards: float
-    documents: str  # "documented" or "kacha"
-    description: Optional[str] = ""
-
-class ResidentialRentDetails(BaseModel):
-    monthly_rent: float
-    negotiable: bool
-    advance_amount: float
-    utility_bills_included: bool
-    address: str
-    bedrooms: int
-    bathrooms: int
-    floor_number: Optional[str] = None
-    total_area_yards: Optional[float] = None
-    description: Optional[str] = ""
-
-class CommercialRentDetails(BaseModel):
-    monthly_rent: float
-    negotiable: bool
-    advance_amount: float
-    utility_bills_included: bool
-    address: str
-    area_yards: float
-    floor_number: Optional[str] = None
-    description: Optional[str] = ""
-
-class CommercialSellDetails(BaseModel):
-    price: float
-    negotiable: bool
-    address: str
-    area_yards: float
-    floor_number: Optional[str] = None
-    description: Optional[str] = ""
-
-class AgriculturalLeaseDetails(BaseModel):
-    rent_per_acre: float
-    negotiable: bool
-    address: str
-    total_area: float
-    lease_duration: int
-    available_area: float
-    description: Optional[str] = ""
-
-class AgriculturalSellDetails(BaseModel):
-    price_per_acre: float
-    negotiable: bool
-    address: str
-    total_area: float
-    available_area: float
-    description: Optional[str] = ""
-
-# ========== Main Property Model ==========
-
-class PropertyInput(BaseModel):
-    category: str  # "residential", "commercial", "agricultural"
-    subcategory: str  # "rent", "sell", "lease"
-    title: str
-    images: List[str] = []
-
-    # Optional Details for Conditional Fields
-    residential_sell: Optional[ResidentialSellDetails] = None
-    residential_rent: Optional[ResidentialRentDetails] = None
-    commercial_rent: Optional[CommercialRentDetails] = None
-    commercial_sell: Optional[CommercialSellDetails] = None
-    agricultural_lease: Optional[AgriculturalLeaseDetails] = None
-    agricultural_sell: Optional[AgriculturalSellDetails] = None
 
 # ========== API Endpoint ==========
 
@@ -151,9 +80,9 @@ async def add_property(
     print("Stringified Data:")
     print(string_data)
     
-    result = await Runner.run(moderation_agent, string_data)  # list[TResponseInputItem]
-    print(result.final_output)
-    update_property_status(result.final_output)
+    agent_result = await Runner.run(moderation_agent, string_data)  # list[TResponseInputItem]
+    print(agent_result.final_output)
+    update_property_status(agent_result.final_output)
     print("Property status updated successfully.")
 
 
