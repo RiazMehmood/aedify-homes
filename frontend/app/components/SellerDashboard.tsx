@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from "react";
-import { signOut } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { signOut, useSession } from "next-auth/react";
 import TopBar from "./SellerDashboard/Topbar";
 import Sidebar from "./SellerDashboard/Sidebar";
 import OverviewPanel from "./SellerDashboard/OverviewPanel";
@@ -13,6 +13,40 @@ import AddPropertyCard from "./SellerDashboard/AddPropertyCard"; // 🔸 Modal t
 
 const SellerDashboard = () => {
   const [showAddProperty, setShowAddProperty] = useState(false);
+  // const { data: session } = useSession();
+
+// useEffect(() => {
+//   if (!session?.user?.email) return;
+
+//   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+//   const host = window.location.host;
+//   const token = localStorage.getItem("token"); // If you’re storing JWT manually
+//   const socket = new WebSocket(`${protocol}://${host}/ws?token=${token}`);
+
+//   socket.onopen = () => {
+//     console.log("🔌 WebSocket connected");
+//   };
+
+//   socket.onmessage = (event) => {
+//     const data = JSON.parse(event.data);
+//     if (data.event === "open_add_property_modal") {
+//       setShowAddProperty(true);
+//     }
+//   };
+
+//   socket.onclose = () => {
+//     console.log("🔌 WebSocket disconnected");
+//   };
+
+//   socket.onerror = (error) => {
+//     console.error("WebSocket error:", error);
+//   };
+
+//   return () => {
+//     socket.close();
+//   };
+// }, [session?.user?.email]);
+
 
   const handleAddPropertyClick = () => {
     setShowAddProperty(true);

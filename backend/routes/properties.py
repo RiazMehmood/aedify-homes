@@ -1,21 +1,11 @@
-import json
-from utils.update_property_status import update_property_status
-from utils.get_pending_properties import get_pending_properties
 from fastapi import APIRouter, Depends, HTTPException
 from db.mongo import properties_collection
 from routes.auth import get_current_user
 from datetime import datetime
-from agents import Runner
-from agents_folder.moderation_agent import moderation_agent
-from models.pydantic_models import ( ResidentialSellDetails, 
-                                    ResidentialRentDetails, 
-                                    CommercialRentDetails,
-                                    CommercialSellDetails,
-                                    AgriculturalLeaseDetails,
-                                    AgriculturalSellDetails,
-                                    PropertyInput)
+from models.pydantic_models import PropertyInput
 
 router = APIRouter()
+
 
 # ========== API Endpoint ==========
 
@@ -35,12 +25,13 @@ async def add_property(
         "email": user["email"],
         "city": user.get("city", ""),
         "created_at": datetime.utcnow(),
-        "views": 0,
+        "views": 100,
         "watchlist": 0,
         "inquiries": [],
         "active": True,
         "status": "pending approval",
         "review_comment": "",
+
     }
 
     # Inject correct data based on category/subcategory
@@ -72,18 +63,6 @@ async def add_property(
         raise HTTPException(status_code=400, detail="Invalid property category.")
     print("📦 Inserting property:", property_doc)
     result = properties_collection.insert_one(property_doc)
-    # Fetch pending properties for moderation
-    # get_pending_properties()
-    moderation_data = get_pending_properties()
-
-    string_data = json.dumps(moderation_data, indent=2)
-    print("Stringified Data:")
-    print(string_data)
-    
-    agent_result = await Runner.run(moderation_agent, string_data)  # list[TResponseInputItem]
-    print(agent_result.final_output)
-    update_property_status(agent_result.final_output)
-    print("Property status updated successfully.")
 
 
     return {

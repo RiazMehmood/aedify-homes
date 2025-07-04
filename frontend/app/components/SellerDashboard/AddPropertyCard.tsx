@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import ImageUpload from './UploadImage'; 
+import ImageUpload from './UploadImage';
 
 const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
   const { data: session } = useSession();
@@ -11,7 +11,7 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
   const [propertyType, setPropertyType] = useState('');
   const [dealType, setDealType] = useState('');
   const [form, setForm] = useState<any>({});
-  const [images, setImages] = useState<string[]>([]); 
+  const [images, setImages] = useState<string[]>([]);
 
   const isResidential = mainCategory === 'property' && propertyType === 'residential';
   const isCommercial = mainCategory === 'property' && propertyType === 'commercial';
@@ -24,10 +24,9 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
     setForm((prev: any) => ({ ...prev, [field]: value }));
   };
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("handle submit triggered")
 
     if (isAgricultural && dealType === 'rent') {
       alert('❌ Agricultural rent is not supported');
@@ -71,7 +70,6 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
     payload[detailKey] = detailForm;
 
     try {
-      console.log("Submitting payload:", payload);
       const res = await fetch('http://localhost:8000/api/properties', {
         method: 'POST',
         headers: {
@@ -94,9 +92,11 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
   };
 
   return (
-    <div className="p-4">
+    <div className="p-4 h-[90vh] flex flex-col overflow-hidden">
       <h2 className="text-xl font-semibold mb-4">Add New Listing</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
+
+      {/* Scrollable form area */}
+      <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 pr-2">
         {/* Select category/type/deal */}
         <div className="flex gap-4">
           <select value={mainCategory} onChange={(e) => {
@@ -215,19 +215,18 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
         {/* Description */}
         <textarea placeholder="Description (optional)" value={form.description ?? ''} onChange={(e) => handleChange('description', e.target.value)} className="w-full border px-3 py-2 rounded" rows={3} />
 
-        {/* Submit */}
-    <ImageUpload
-  images={images}
-  onUpload={(updatedImages) => setImages(updatedImages)}
-  accessToken={session?.user?.accessToken || ''}
-/>
+        {/* Image upload */}
+        <ImageUpload
+          images={images}
+          onUpload={(updatedImages) => setImages(updatedImages)}
+          accessToken={session?.user?.accessToken || ''}
+        />
 
-
-
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
-          <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Add Property</button>
-        </div>
+      {/* Sticky footer for buttons */}
+      <div className="flex justify-end gap-2 pt-4 sticky bottom-0 bg-white border-t mt-2">
+        <button type="button" onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
+        <button type="submit" form="property-form" className="px-4 py-1 bg-blue-600 text-white hover:cursor-pointer rounded">Add Property</button>
+      </div>
       </form>
     </div>
   );
