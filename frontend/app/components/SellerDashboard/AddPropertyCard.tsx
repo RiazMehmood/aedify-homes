@@ -26,6 +26,7 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     console.log("handle submit triggered")
 
     if (isAgricultural && dealType === 'rent') {
@@ -69,7 +70,27 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
 
     payload[detailKey] = detailForm;
 
+    // Cleanup invalid fields based on context
+if (detailKey === 'residential_sell' || detailKey === 'commercial_sell' || detailKey === 'agricultural_sell' || detailKey === 'agricultural_lease') {
+  delete detailForm.utility_bills_included;
+}
+
+//     const requiredRentFields = [
+//   'monthly_rent', 'advance_amount', 'utility_bills_included',
+//   'address', 'bedrooms', 'bathrooms'
+// ];
+
+// if(isResidential && isRent){
+//   for (const field of requiredRentFields) {
+//     if (!form[field] && form[field] !== false && form[field] !== 0) {
+//       alert(`❌ Missing required field: ${field}`);
+//       return;
+//     }
+//   }
+// }
+
     try {
+      console.log("FINAL PAYLOAD", JSON.stringify(payload, null, 2));
       const res = await fetch('http://localhost:8000/api/properties', {
         method: 'POST',
         headers: {
@@ -83,6 +104,8 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
         alert('✅ Property added!');
         onClose();
       } else {
+        console.log("PAYLOAD DETAILS",payload)
+        console.log('Failed to add property:', res.status, res.statusText);
         alert('❌ Failed to add property.');
       }
     } catch (err) {
@@ -163,7 +186,7 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
         )}
 
         {/* Rent-specific */}
-        {isRent && (
+        {isResidential || isCommercial && isRent && (
           <>
             <input placeholder="Advance Amount" type="number" value={form.advance_amount ?? ''} onChange={(e) => handleChange('advance_amount', e.target.value)} className="w-full border px-3 py-2 rounded" />
             <select value={form.utility_bills_included ? 'yes' : 'no'} onChange={(e) => handleChange('utility_bills_included', e.target.value === 'yes')} className="border px-3 py-2 rounded">
@@ -188,11 +211,12 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
             <input placeholder="Bathrooms" type="number" value={form.bathrooms ?? ''} onChange={(e) => handleChange('bathrooms', e.target.value)} className="w-full border px-3 py-2 rounded" />
             <input placeholder="Floor Number" value={form.floor_number ?? ''} onChange={(e) => handleChange('floor_number', e.target.value)} className="w-full border px-3 py-2 rounded" />
             <input placeholder="Total Area (yards)" type="number" value={form.total_area_yards ?? ''} onChange={(e) => handleChange('total_area_yards', e.target.value)} className="w-full border px-3 py-2 rounded" />
-            <select value={form.documents ?? ''} onChange={(e) => handleChange('documents', e.target.value)} className="w-full border px-3 py-2 rounded">
+            {isSell && (<><select value={form.documents ?? ''} onChange={(e) => handleChange('documents', e.target.value)} className="w-full border px-3 py-2 rounded">
               <option value="">Select Documents</option>
               <option value="documented">Documented</option>
               <option value="kacha">Kacha</option>
-            </select>
+            </select></>
+            )}
           </>
         )}
 
@@ -225,7 +249,7 @@ const AddPropertyCard = ({ onClose }: { onClose: () => void }) => {
       {/* Sticky footer for buttons */}
       <div className="flex justify-end gap-2 pt-4 sticky bottom-0 bg-white border-t mt-2">
         <button type="button" onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
-        <button type="submit" form="property-form" className="px-4 py-1 bg-blue-600 text-white hover:cursor-pointer rounded">Add Property</button>
+        <button type="submit" className="px-4 py-1 bg-blue-600 text-white hover:cursor-pointer rounded">Add Property</button>
       </div>
       </form>
     </div>

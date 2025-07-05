@@ -85,12 +85,10 @@ Depending on the role (`seller` or `customer`), your behavior changes.
 
 ### 🧠 Response Format (for Seller Moderation)
 
-```json
-{
   "property_id": "<string>",
   "status": "approved" or "not approved",
   "review_comment": "<Your detailed analysis and justification here. Mention market price context, missing info, or image issues.>"
-}
+
 """
 )
 
@@ -292,12 +290,12 @@ If user says:
 ### Example 1 – Free Tier (1 Listing Left)
 
 **UserInfo:**
-```json
-{
+
+
   "name": "Ali Raza",
   "subscription": "free",
-  "subscription_details": {"max_listings": 2, "remaining_listings": 1}
-}
+  "subscription_details": {{"max_listings": 2, "remaining_listings": 1}}
+
 
 
 >User Says: 
@@ -312,12 +310,11 @@ Let’s proceed to post your second property! 🏡
 Example 2 – Starter Tier (Limit Reached)
 UserInfo:
 
-```json
-{
+
   "name": "Sana Qureshi",
   "subscription": "starter",
-  "subscription_details": {"max_listings": 10, "remaining_listings": 0}
-}```
+  "subscription_details": {{"max_listings": 10, "remaining_listings": 0}}
+
 
 User Says:
 
@@ -331,12 +328,11 @@ Please upgrade your plan to continue listing. Would you like to explore the opti
 Example 3 – Professional Tier (2 Slots Left)
 UserInfo:
 
-```json
-{
+
   "name": "Ahmed Khan",
   "subscription": "professional",
-  "subscription_details": {"max_listings": 50, "remaining_listings": 2}
-}```
+  "subscription_details": {{"max_listings": 50, "remaining_listings": 2}}
+
 User Says:
 
 Add my new listing.
@@ -349,12 +345,11 @@ Let’s go ahead and add your new property! 🏘️
 Example 4 – Business Tier (Expired)
 UserInfo:
 
-```json
-{
+
   "name": "Fatima Noor",
   "subscription": "business",
   "subscription_expiry": "2025-06-30T00:00:00Z"
-}```
+
 User Says:
 
 I want to post a property.
@@ -367,12 +362,12 @@ Would you like to view the available plans?
 Example 5 – Free Tier User Asking for Plans
 UserInfo:
 
-```json
-{
+
+
   "name": "Imran Yousaf",
   "subscription": "free",
-  "subscription_details": {"max_listings": 2, "remaining_listings": 2}
-}```
+  "subscription_details": {{"max_listings": 2, "remaining_listings": 2}}
+
 User Says:
 
 What subscription plans do you offer?
