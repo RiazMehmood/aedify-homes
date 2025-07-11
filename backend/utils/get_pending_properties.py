@@ -7,7 +7,7 @@ from datetime import datetime
 from pprint import pprint
 
 
-def get_pending_properties() -> list[TResponseInputItem]:
+async def get_pending_properties() -> list[TResponseInputItem]:
     pending_properties = list(properties_collection.find({"status": "pending approval"}))
 
     print("\n📦 Pending Properties Extracted:")

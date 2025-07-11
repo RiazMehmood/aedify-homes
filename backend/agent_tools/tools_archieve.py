@@ -1,85 +1,141 @@
 from pprint import pprint
 from bson import ObjectId
+from utils.get_pending_properties import get_pending_properties
 from db.mongo import properties_collection
 from models.pydantic_models import PropertyModerationOutput, UserInfo
 from agents import function_tool, RunContextWrapper
+from utils.websocket import send_event
+from db.mongo import properties_collection
+from bson import ObjectId
 
-
-@function_tool
-def update_property_status(wrapper: RunContextWrapper[UserInfo], data: PropertyModerationOutput) -> dict:
-
-    object_id = ObjectId(data.property_id)
-
-    # Check if property exists before update
-    property_data = properties_collection.find_one({"_id": object_id})
-
-    if not property_data:
-        return {"success": False, "message": "Property not found with given ID."}
-
-    pprint({"Before Update": property_data})
-
-    result = properties_collection.update_one(
-        {"_id": object_id},
-        {
-            "$set": {
-                "status": data.status,
-                "review_comment": data.review_comment
-            }
-        }
-    )
-
-    updated_data = properties_collection.find_one({"_id": object_id})
-    pprint({"After Update": updated_data})
-
-    if result.modified_count == 1:
-        return {"success": True, "message": "Property updated successfully"}
-    else:
-        return {"success": False, "message": "No update performed. Values may be unchanged."}
+def addPropertyErrorFunction(wrapper: RunContextWrapper[UserInfo], error: Exception) -> str:
+    return {"status": error , "message": "There is some issue inside the addProperty tool."}
 
 
 #Seller Agent Tools
-@function_tool
-def addProperty(wrapper: RunContextWrapper[UserInfo] ) -> dict:
+@function_tool(failure_error_function=addPropertyErrorFunction)
+async def addProperty(wrapper: RunContextWrapper[UserInfo]) -> dict:
     """
-    Add a new property to the database.
+    Triggers the 'Add Property' button in the frontend via WebSocket.
     """
-    return 
-    
-@function_tool
-def pendingApproval(wrapper: RunContextWrapper[UserInfo], property_id: str) -> dict:
-    """
-    Mark a property as pending approval.
-    """
-    object_id = ObjectId(property_id)
-    result = properties_collection.update_one(
-        {"_id": object_id},
-        {"$set": {"status": "pending_approval"}}
-    )
-    if result.modified_count == 1:
-        return {"success": True, "message": "Property marked as pending approval"}
-    else:
-        return {"success": False, "message": "Failed to mark property as pending approval"}
+    email = wrapper.context.email
+    if not email:
+        return {"status": "error", "message": "User email not found in context"}
+
+    # await trigger_add_property_modal(email)
+    print("Trigger add Property initiated")
+    await send_event(email, {
+        "type": "open_add_property_modal"
+    })
+    return {"status": "success", "message": "Add Property modal triggered"}
+
 
 @function_tool
-def updatePendingApproval(wrapper: RunContextWrapper[UserInfo], property_id: str) -> dict:
+async def pendingApproval(wrapper: RunContextWrapper[UserInfo]) -> dict:
     """
-    Update a pending approval property.
+    Fetch all properties uploaded by the user with status 'pending approval'.
     """
-    return {"success": False, "message": "Failed to update pending approval property"}  
+    user_email = wrapper.context.email
+
+    properties_cursor = properties_collection.find({
+        "email": user_email,
+        "status": "pending approval"
+    })
+
+    properties = []
+    for p in properties_cursor:
+        p["id"] = str(p["_id"])
+        p.pop("_id", None)
+        properties.append(p)
+
+    return {
+        "success": True,
+        "pending_properties": properties,
+        "count": len(properties)
+    }
+
+
+@function_tool
+def updatePendingApproval(
+    wrapper: RunContextWrapper[UserInfo],
+    property_id: str,
+    status: str,
+    review_comment: str
+) -> dict:
+    """
+    Update the status and review comment of a pending approval property.
+
+    Parameters:
+    - property_id: ID of the property to update.
+    - status: 'approved' or 'not approved'.
+    - review_comment: Moderation explanation and findings.
+    """
+    user_email = wrapper.context.email
+
+    try:
+        result = properties_collection.update_one(
+            {
+                "_id": ObjectId(property_id),
+                "email": user_email,
+                "status": "pending approval"
+            },
+            {
+                "$set": {
+                    "status": status,
+                    "review_comment": review_comment
+                }
+            }
+        )
+
+        if result.matched_count == 0:
+            return {
+                "success": False,
+                "message": "Property not found or not eligible for update."
+            }
+
+        # ✅ Notify frontend via WebSocket
+        import asyncio
+        asyncio.create_task(send_event(user_email, {
+            "type": "moderation_updated",
+            "property_id": property_id,
+            "status": status,
+            "review_comment": review_comment
+        }))
+
+        return {
+            "success": True,
+            "message": f"Property updated with status '{status}'."
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to update property: {str(e)}"
+        }
+
     
+
+
+@function_tool
+async def updateProperty(wrapper: RunContextWrapper[UserInfo]):
+    from utils.websocket import send_event
+    await send_event(wrapper.context.email, {"type": "open_update_properties_modal"})
+    return {"success": True, "message": "Modal opened"}
+
+@function_tool
+def queryDataBase(wrapper: RunContextWrapper[UserInfo]) -> dict:
+    """
+    Query the database for properties based on given criteria.
+    """
+    return {"success": False, "message": "No properties found matching the query"} 
+
+
 @function_tool
 def AISuggestions(wrapper: RunContextWrapper[UserInfo], property_id: str) -> dict:
     """
     Add AI suggestions to a property.
     """
     return {"success": False, "message": "Failed to add AI suggestions"}    
-    
-@function_tool
-def updateProperty(wrapper: RunContextWrapper[UserInfo], property_id: str) -> dict:
-    """
-    Update an existing property.
-    """
-    return {"success": False, "message": "Failed to update property"}   
     
 
 @function_tool
@@ -131,6 +187,7 @@ def searchProperty(wrapper: RunContextWrapper[UserInfo]) -> dict:
     """
     return {"success": False, "message": "No properties found matching the criteria"}   
     
+ 
 @function_tool
 def onOffer(wrapper: RunContextWrapper[UserInfo], property_id: str) -> dict:
     """
@@ -145,12 +202,6 @@ def contactSeller(wrapper: RunContextWrapper[UserInfo], property_id: str) -> dic
     """
     return {"success": False, "message": "Failed to send contact request or property does not exist"}   
     
-@function_tool
-def queryDataBase(wrapper: RunContextWrapper[UserInfo]) -> dict:
-    """
-    Query the database for properties based on given criteria.
-    """
-    return {"success": False, "message": "No properties found matching the query"}  
     
 @function_tool
 def offerAccepted(wrapper: RunContextWrapper[UserInfo], property_id: str, offer_id: str) -> dict:

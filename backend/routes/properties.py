@@ -78,3 +78,31 @@ async def add_property(
         body = await request.body()
         print("❌ Invalid Payload Recieved", body.decode())
         print("❌ Error Details:", e)
+
+
+
+from bson import ObjectId
+
+
+@router.get("/api/properties/me")
+async def get_my_properties(user: dict = Depends(get_current_user)):
+    if user.get("role") != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can view their properties.")
+
+    try:
+        # 🟢 Sort by creation date (newest first)
+        properties_cursor = properties_collection.find(
+            {"email": user["email"]}
+        ).sort("created_at", -1)
+
+        properties = []
+        for p in properties_cursor:
+            p["id"] = str(p["_id"])
+            p.pop("_id", None)
+            properties.append(p)
+
+        return properties
+
+    except Exception as e:
+        print("❌ Error fetching properties:", e)
+        raise HTTPException(status_code=500, detail="Something went wrong.")

@@ -1,8 +1,12 @@
+import asyncio
+import os
+import litellm
+from utils.websocket import connect_client, disconnect_client
 from jose import jwt, JWTError
 from utils.websocket import connect_client, disconnect_client
 from models.pydantic_models import Input
 from routes import (images, properties, auth)
-from fastapi import FastAPI, Request, Depends, WebSocket, Query
+from fastapi import FastAPI, Request, Depends, WebSocket, Query, WebSocketDisconnect
 from models.pydantic_models import UserInfo
 from agents_folder.customer_agent import customer_agent
 from agents_folder.seller_agent import seller_agent
@@ -10,14 +14,8 @@ from agents_folder.guardrail_agent import guardrail_agent
 from fastapi.middleware.cors import CORSMiddleware
 from routes.auth import get_current_user
 from dotenv import load_dotenv
-import asyncio
-import os
 from agents import (
     Agent,
-    set_default_openai_api,
-    ItemHelpers,
-    set_default_openai_client,
-    AsyncOpenAI,
     Runner,
     set_tracing_disabled,
     RunContextWrapper,
@@ -25,8 +23,6 @@ from agents import (
     InputGuardrailTripwireTriggered,
     TResponseInputItem,
     input_guardrail,
-    RunConfig,
-    OpenAIChatCompletionsModel,
 )
 
 # Load .env
@@ -37,24 +33,7 @@ if not api_key:
 
 gemini_api_key = api_key
 set_tracing_disabled(True)
-set_default_openai_api("chat_completions")
-
-external_client = AsyncOpenAI(
-    api_key=gemini_api_key,
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-)
-set_default_openai_client(external_client)
-
-model = OpenAIChatCompletionsModel(
-    model="gemini-2.5-flash-lite-preview-06-17",
-    openai_client=external_client
-)
-
-config = RunConfig(
-    model=model,
-    model_provider=external_client,
-    tracing_disabled=True
-)
+litellm.disable_aiohttp_transport = True # Disable aiohttp transport for litellm
 
 # FastAPI app setup
 app = FastAPI()
@@ -72,36 +51,60 @@ app.include_router(properties.router)
 app.include_router(images.router)
 
 
-# SECRET_KEY = os.getenv("NEXTAUTH_SECRET")
-# ALGORITHM = "HS256"
+SECRET_KEY = os.getenv("NEXTAUTH_SECRET")
+ALGORITHM = "HS256"
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
+    print("🔐 WebSocket request received")
+    email = None  # define up front to access in finally block
+
+    try:
+        print("🔍 Decoding token...")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("email")
+
+        if not email:
+            print("❌ Missing email in token.")
+            await websocket.close(code=1008)
+            return
+
+        print(f"✅ Token verified. Email: {email}")
+        await connect_client(email, websocket)
+        print(f"📡 WebSocket connection established for: {email}")
+
+        while True:
+            try:
+                message = await websocket.receive_text()
+                if message == "ping":
+                    continue  # just ignore pings
+            except WebSocketDisconnect:
+                print(f"🚫 Client disconnected: {email}")
+                break
+            except Exception as e:
+                print(f"⚠️ Unexpected WebSocket error: {e}")
+                break
 
 
-# @app.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
-#     try:
-#         # Decode JWT from query parameter
-#         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-#         email = payload.get("email")
+    except WebSocketDisconnect as e:
+        print(f"⚠️ WebSocketDisconnect: {e}")
+        # no need to call websocket.close() here — it's already closed
 
-#         if not email:
-#             await websocket.close(code=1008)
-#             return
+    except Exception as e:
+        print(f"⚠️ Unexpected WebSocket error: {e}")
+        try:
+            await websocket.close(code=1011)  # only close if not already closed
+        except RuntimeError:
+            print("⚠️ Tried to close already-closed WebSocket.")
 
-#         # Accept and register this client
-#         await connect_client(email, websocket)
+    finally:
+        if email:
+            try:
+                await disconnect_client(email)
+            except Exception as disconnect_err:
+                print(f"⚠️ Error during disconnect: {disconnect_err}")
 
-#         while True:
-#             await websocket.receive_text()  # Keeps the connection alive
-
-#     except JWTError:
-#         await websocket.close(code=1008)
-
-#     except Exception:
-#         await websocket.close(code=1011)
-#         await disconnect_client(email)
-
-
-
+# Input Guardrail for Real Estate Queries
 @input_guardrail
 async def real_estate_input_guardrail(
     ctx: RunContextWrapper[UserInfo],
@@ -115,9 +118,6 @@ async def real_estate_input_guardrail(
     )
 
 
-
-
-
 # 🧪 Test endpoint (optional)
 @app.post("/chat")
 async def agent_endpoint(input: Input, request: Request, user: dict = Depends(get_current_user)):
@@ -125,6 +125,7 @@ async def agent_endpoint(input: Input, request: Request, user: dict = Depends(ge
         name=user.get("name", "User"),
         city=user.get("city", ""),
         role=user.get("role", ""),
+        email=user.get("email", ""),
         whatsapp=user.get("whatsapp")
     )
     
@@ -139,25 +140,57 @@ async def agent_endpoint(input: Input, request: Request, user: dict = Depends(ge
         return {"result": "Your role is not recognized. Please contact support."}
 
     try:
-        result = await Runner.run(agent, input.value, max_turns=2, context=user_info)
+        result = await Runner.run(agent, input.value, max_turns=5, context=user_info)
         return {"result": result.final_output}
     except InputGuardrailTripwireTriggered:
         return {"result": "I only handle real estate queries."}
-   
-# 🔁 Manual test
-async def main():
-    try:
-        print("🔍 RealEstate Assistant (Type 'exit' to quit)")
-        while True:
-            user_input = input("You: ")
-            if user_input.lower() == "exit":
-                break
-            result = await Runner.run(customer_agent, user_input)
-            print("Guardrail Not Triggered")
-            print(f"🤖 Agent: {result.final_output}")
-    except InputGuardrailTripwireTriggered:
-        print("Guardrail Triggered")
-        print("I only handle real estate queries.")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+
+#                       Test Preparation code
+# ---------------------------------------------------------------------
+# from pydantic import BaseModel
+
+# class AddInput(BaseModel):
+#     x: int
+#     y: int
+
+
+# class Output(BaseModel):
+#     first_number: int
+#     second_number: int
+#     operation: str
+#     result: int
+
+
+
+
+
+# test_agent: Agent = Agent(
+#     name="Test Agent",
+#     instructions="you are a test agent always use the provided tools for addition",
+#     model=LitellmModel(
+#         model="gemini/gemini-2.5-flash-preview-04-17",
+#         api_key=gemini_api_key,
+#     ),
+
+# )
+
+
+
+# # 🔁 Manual test
+# async def main():
+#     try:
+#         print("🔍 RealEstate Assistant (Type 'exit' to quit)")
+#         while True:
+#             user_input = input("You: ")
+#             if user_input.lower() == "exit":
+#                 break
+#             result = await Runner.run(test_agent, user_input)
+#             print("Guardrail Not Triggered")
+#             print(f"🤖 Agent: {result.final_output}")
+#     except InputGuardrailTripwireTriggered:
+#         print("Guardrail Triggered")
+#         print("I only handle real estate queries.")
+
+# if __name__ == "__main__":
+#     asyncio.run(main())

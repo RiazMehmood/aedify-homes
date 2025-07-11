@@ -1,8 +1,6 @@
-# backend/websockets.py
-
 from fastapi import WebSocket
 from typing import Dict
-
+from starlette.websockets import WebSocketState
 connected_clients: Dict[str, WebSocket] = {}
 
 async def connect_client(email: str, websocket: WebSocket):
@@ -11,10 +9,16 @@ async def connect_client(email: str, websocket: WebSocket):
     print(f"✅ Connected: {email}")
 
 async def disconnect_client(email: str):
-    if email in connected_clients:
-        await connected_clients[email].close()
-        del connected_clients[email]
-        print(f"❌ Disconnected: {email}")
+    websocket = connected_clients.get(email)
+    if websocket:
+        try:
+            if websocket.application_state != WebSocketState.DISCONNECTED:
+                await websocket.close()
+        except Exception as e:
+            print(f"⚠️ Failed to close WebSocket for {email}: {e}")
+        finally:
+            del connected_clients[email]
+            print(f"❌ Disconnected: {email}")
 
 async def send_event(email: str, event: dict):
     if email in connected_clients:
@@ -24,3 +28,4 @@ async def send_event(email: str, event: dict):
         except Exception as e:
             print(f"⚠️ Error sending to {email}: {e}")
             await disconnect_client(email)
+

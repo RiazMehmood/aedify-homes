@@ -29,6 +29,7 @@ class UserInfo(BaseModel):
     name: str
     city: str
     role: str
+    email: str
     whatsapp: int | str | None = None
     subscription: Optional[str] = None
     subscription_details: Optional[dict] = None
